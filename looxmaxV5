@@ -1,0 +1,973 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>LOOKSMAXX SCANNER v5</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:      #03070a;
+  --panel:   #060d11;
+  --border:  #0b2333;
+  --accent:  #00d4ff;
+  --green:   #00ff99;
+  --red:     #ff2d4e;
+  --orange:  #ffaa00;
+  --purple:  #b060ff;
+  --dim:     #1a3d50;
+  --text:    #7ec5dc;
+  --glow:    0 0 18px #00d4ff33;
+  --gglow:   0 0 18px #00ff9933;
+  --rglow:   0 0 18px #ff2d4e33;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);
+  font-family:'Share Tech Mono',monospace;touch-action:none}
+
+/* Scanlines */
+body::after{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;
+  background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,.055) 3px,rgba(0,0,0,.055) 4px);
+}
+/* CRT vignette */
+body::before{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:9997;
+  background:radial-gradient(ellipse at center,transparent 60%,rgba(0,0,0,.55) 100%);
+}
+
+/* ── LAYOUT ── */
+#app{display:flex;flex-direction:column;height:100vh;height:100dvh}
+
+/* Header */
+#hdr{
+  flex-shrink:0;display:flex;align-items:center;justify-content:space-between;
+  padding:7px 14px;border-bottom:1px solid var(--border);
+  background:rgba(0,0,0,.65);backdrop-filter:blur(8px);
+}
+.logo{font-family:'Rajdhani',sans-serif;font-weight:900;font-size:1.05rem;
+  letter-spacing:4px;color:var(--accent);text-shadow:var(--glow)}
+.logo em{color:var(--green);font-style:normal}
+.hdr-right{display:flex;align-items:center;gap:12px}
+.live-dot{width:6px;height:6px;border-radius:50%;background:var(--green);
+  box-shadow:var(--gglow);animation:blink 1.3s infinite;flex-shrink:0}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+.hdr-info{font-size:.55rem;color:var(--dim);text-align:right;line-height:1.7}
+#hdr-status{color:var(--accent)}
+#hdr-fps{color:var(--dim)}
+
+/* Status bar */
+#status-bar{
+  flex-shrink:0;padding:3px 12px;font-size:.55rem;color:var(--dim);
+  display:flex;justify-content:space-between;align-items:center;
+  border-bottom:1px solid var(--border);background:rgba(0,0,0,.4);
+}
+#best-badge{
+  display:none;font-size:.5rem;padding:1px 6px;
+  border:1px solid var(--purple);color:var(--purple);border-radius:2px;
+  letter-spacing:1px;
+}
+
+/* Camera */
+#cam-wrap{
+  position:relative;flex:0 0 auto;width:100%;aspect-ratio:3/4;
+  max-height:47vh;overflow:hidden;background:#000;
+}
+#video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+#overlay{position:absolute;inset:0;width:100%;height:100%;transform:scaleX(-1)}
+
+/* Scan beam */
+.scan-beam{
+  position:absolute;left:0;right:0;height:2px;z-index:5;
+  background:linear-gradient(90deg,transparent,var(--accent),transparent);
+  opacity:.4;animation:beam 3s linear infinite;
+}
+@keyframes beam{0%{top:-2px;opacity:.4}90%{top:100%;opacity:.4}100%{top:100%;opacity:0}}
+
+/* Corners */
+.corner{position:absolute;width:18px;height:18px;z-index:6;transition:border-color .3s}
+.corner.tl{top:8px;left:8px;border-top:2px solid var(--accent);border-left:2px solid var(--accent)}
+.corner.tr{top:8px;right:8px;border-top:2px solid var(--accent);border-right:2px solid var(--accent)}
+.corner.bl{bottom:8px;left:8px;border-bottom:2px solid var(--accent);border-left:2px solid var(--accent)}
+.corner.br{bottom:8px;right:8px;border-bottom:2px solid var(--accent);border-right:2px solid var(--accent)}
+.corner.active{border-color:var(--green)!important}
+
+/* Score ring */
+#score-badge{
+  position:absolute;top:8px;left:50%;transform:translateX(-50%);
+  z-index:7;text-align:center;display:none;
+}
+#score-ring-wrap{position:relative;width:72px;height:72px;margin:0 auto}
+#score-ring-wrap svg{position:absolute;inset:0;width:100%;height:100%}
+.ring-bg{fill:none;stroke:var(--border);stroke-width:3}
+.ring-fill{fill:none;stroke-width:3;stroke-linecap:round;
+  transform:rotate(-90deg);transform-origin:50% 50%;
+  transition:stroke-dashoffset .6s cubic-bezier(.25,.46,.45,.94),stroke .3s}
+.ring-center{position:relative;z-index:1;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;height:100%}
+.score-num{font-family:'Rajdhani',sans-serif;font-weight:900;font-size:1.6rem;
+  line-height:1;transition:color .3s}
+.score-sub{font-size:.45rem;color:var(--dim);letter-spacing:2px}
+.tier-text{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:.65rem;
+  letter-spacing:2px;margin-top:2px;transition:color .3s;text-shadow:0 0 10px currentColor}
+
+/* Sparkline */
+#sparkline-wrap{
+  flex-shrink:0;padding:3px 12px 4px;background:rgba(0,0,0,.3);
+  border-bottom:1px solid var(--border);display:none;align-items:center;gap:8px;
+}
+#sparkline-wrap canvas{display:block}
+#sparkline-label{font-size:.5rem;color:var(--dim);letter-spacing:1px;white-space:nowrap}
+
+/* No-face */
+#noface{
+  position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;z-index:6;gap:8px;
+}
+#noface .nf-icon{font-size:2rem;opacity:.25}
+#noface .nf-text{font-size:.6rem;letter-spacing:2px;color:var(--dim);text-align:center}
+
+/* Tilt warning */
+#tilt-warn{
+  position:absolute;bottom:12px;left:50%;transform:translateX(-50%);z-index:7;
+  font-size:.55rem;letter-spacing:2px;color:var(--orange);padding:3px 8px;
+  border:1px solid var(--orange);background:rgba(0,0,0,.7);display:none;
+  white-space:nowrap;animation:warningPulse 1s ease-in-out infinite;
+}
+@keyframes warningPulse{0%,100%{opacity:1}50%{opacity:.5}}
+
+/* Tags */
+#tags-row{display:flex;flex-wrap:wrap;gap:4px;padding:5px 12px 4px}
+.tag{font-size:.55rem;letter-spacing:1.5px;padding:2px 7px;
+  border:1px solid var(--border);color:var(--dim);border-radius:2px;
+  text-transform:uppercase;transition:all .4s}
+.tag.good{border-color:var(--green);color:var(--green);box-shadow:var(--gglow)}
+.tag.mid{border-color:var(--orange);color:var(--orange)}
+.tag.bad{border-color:var(--red);color:var(--red)}
+
+/* Metrics panel */
+#metrics-panel{flex:1;overflow-y:auto;padding:8px 12px 80px;
+  -webkit-overflow-scrolling:touch;scroll-behavior:smooth}
+#metrics-panel::-webkit-scrollbar{display:none}
+
+.group{margin-bottom:12px}
+.group-title{
+  font-family:'Rajdhani',sans-serif;font-size:.62rem;letter-spacing:3px;
+  color:var(--dim);padding:3px 0;border-bottom:1px solid var(--border);
+  margin-bottom:7px;text-transform:uppercase;display:flex;align-items:center;gap:6px;
+}
+.group-avg{
+  margin-left:auto;font-size:.55rem;padding:1px 5px;border-radius:2px;
+  border:1px solid currentColor;
+}
+
+.metric{margin-bottom:8px;cursor:pointer}
+.metric-row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px}
+.metric-name{font-size:.67rem;color:var(--text);letter-spacing:.5px}
+.metric-right{display:flex;align-items:center;gap:5px}
+.metric-raw{font-size:.55rem;color:var(--dim)}
+.metric-score{font-size:.67rem;min-width:26px;text-align:right;font-weight:bold;transition:color .3s}
+.bar-bg{height:4px;background:var(--border);border-radius:2px;overflow:hidden;position:relative}
+.bar-fill{
+  height:100%;border-radius:2px;transition:width .5s cubic-bezier(.25,.46,.45,.94);
+  position:relative;
+}
+.bar-fill::after{
+  content:'';position:absolute;right:-1px;top:-3px;width:8px;height:8px;
+  border-radius:50%;background:inherit;filter:brightness(1.5);box-shadow:0 0 5px currentColor;
+}
+.bar-fill.good{background:linear-gradient(90deg,#00884499,var(--green))}
+.bar-fill.mid{background:linear-gradient(90deg,#995500aa,var(--orange))}
+.bar-fill.bad{background:linear-gradient(90deg,#880022aa,var(--red))}
+
+/* Tip drawer */
+.tip-drawer{
+  display:none;margin-top:5px;padding:5px 8px;
+  background:rgba(0,0,0,.4);border-left:2px solid var(--dim);
+  font-size:.57rem;color:var(--dim);line-height:1.5;letter-spacing:.3px;
+  transition:all .3s;
+}
+.tip-drawer.open{display:block;border-left-color:var(--orange);color:var(--text)}
+
+/* AI Tips button */
+#ai-tips-btn{
+  position:fixed;bottom:14px;right:14px;z-index:100;
+  background:rgba(3,7,10,.9);border:1px solid var(--purple);
+  color:var(--purple);font-family:'Share Tech Mono',monospace;
+  font-size:.6rem;letter-spacing:2px;padding:8px 14px;
+  border-radius:2px;cursor:pointer;backdrop-filter:blur(8px);
+  box-shadow:0 0 20px #b060ff22;transition:all .2s;
+}
+#ai-tips-btn:active{background:var(--purple);color:#000}
+#ai-tips-btn.loading{opacity:.6;pointer-events:none}
+
+/* AI Tips panel */
+#ai-panel{
+  position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.92);
+  display:none;flex-direction:column;backdrop-filter:blur(10px);
+}
+#ai-panel.open{display:flex}
+#ai-panel-hdr{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 16px;border-bottom:1px solid var(--border);
+  font-family:'Rajdhani',sans-serif;font-weight:700;font-size:.9rem;
+  letter-spacing:3px;color:var(--purple);
+}
+#ai-close{
+  background:none;border:1px solid var(--dim);color:var(--dim);
+  font-family:'Share Tech Mono',monospace;font-size:.6rem;
+  padding:3px 8px;cursor:pointer;letter-spacing:1px;border-radius:2px;
+}
+#ai-close:active{border-color:var(--red);color:var(--red)}
+#ai-content{
+  flex:1;overflow-y:auto;padding:16px;font-size:.65rem;
+  line-height:1.8;color:var(--text);letter-spacing:.3px;
+}
+#ai-content::-webkit-scrollbar{display:none}
+.ai-typing{display:inline-block;width:6px;height:12px;background:var(--purple);
+  animation:blink .6s steps(1) infinite;vertical-align:middle;margin-left:2px}
+
+/* Loading overlay */
+#loading{
+  position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;
+  align-items:center;justify-content:center;z-index:9999;gap:20px;padding:28px;
+}
+.load-logo{
+  font-family:'Rajdhani',sans-serif;font-weight:900;font-size:2rem;
+  letter-spacing:6px;color:var(--accent);text-shadow:var(--glow);text-align:center;
+}
+.load-logo em{color:var(--green);font-style:normal}
+.load-logo small{display:block;font-size:.8rem;letter-spacing:8px;color:var(--dim);margin-top:-4px}
+.load-bar-wrap{width:220px}
+.load-bar-bg{height:1px;background:var(--border)}
+.load-bar-fill{height:100%;background:var(--accent);width:0;transition:width .4s ease;
+  box-shadow:0 0 10px var(--accent)}
+.load-msg{font-size:.58rem;color:var(--dim);letter-spacing:2px;text-align:center}
+.load-note{font-size:.52rem;color:var(--dim);text-align:center;line-height:1.8;opacity:.7}
+
+/* Pulse animation for new high */
+@keyframes newHigh{
+  0%{transform:translateX(-50%) scale(1)}
+  50%{transform:translateX(-50%) scale(1.08)}
+  100%{transform:translateX(-50%) scale(1)}
+}
+.new-high-pulse{animation:newHigh .4s ease}
+</style>
+</head>
+<body>
+
+<!-- Loading -->
+<div id="loading">
+  <div class="load-logo">LOOKS<em>MAXX</em><small>SCANNER v5.0</small></div>
+  <div class="load-bar-wrap">
+    <div class="load-bar-bg"><div class="load-bar-fill" id="lfill"></div></div>
+  </div>
+  <div class="load-msg" id="lmsg">INITIALISIERUNG...</div>
+  <div class="load-note">~30MB Modell wird einmalig geladen</div>
+</div>
+
+<!-- AI Tips Panel -->
+<div id="ai-panel">
+  <div id="ai-panel-hdr">
+    ◈ KI ANALYSE &amp; TIPPS
+    <button id="ai-close">✕ SCHLIESSEN</button>
+  </div>
+  <div id="ai-content"></div>
+</div>
+
+<div id="app">
+  <div id="hdr">
+    <div class="logo">LOOKS<em>MAXX</em> <span style="color:var(--dim);font-size:.65rem">v5</span></div>
+    <div class="hdr-right">
+      <div class="live-dot"></div>
+      <div class="hdr-info">
+        <span id="hdr-status">BEREIT</span><br>
+        <span id="hdr-fps">FPS: --</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="status-bar">
+    <span id="st-left">CAM: WARTE...</span>
+    <span id="best-badge">★ BEST: --</span>
+    <span id="st-right">14 METRIKEN</span>
+  </div>
+
+  <div id="cam-wrap">
+    <div class="scan-beam"></div>
+    <div class="corner tl"></div><div class="corner tr"></div>
+    <div class="corner bl"></div><div class="corner br"></div>
+    <video id="video" autoplay muted playsinline></video>
+    <canvas id="overlay"></canvas>
+    <div id="score-badge">
+      <div id="score-ring-wrap">
+        <svg viewBox="0 0 72 72" xmlns="http://www.w3.org/2000/svg">
+          <circle class="ring-bg" cx="36" cy="36" r="30"/>
+          <circle class="ring-fill" id="ring-fill" cx="36" cy="36" r="30"
+            stroke-dasharray="188.5" stroke-dashoffset="188.5" stroke="var(--green)"/>
+        </svg>
+        <div class="ring-center">
+          <div class="score-num" id="score-num">--</div>
+          <div class="score-sub">/10</div>
+        </div>
+      </div>
+      <div class="tier-text" id="tier-text">--</div>
+    </div>
+    <div id="tilt-warn">⚠ KOPF GERADE HALTEN</div>
+    <div id="noface">
+      <div class="nf-icon">◉</div>
+      <div class="nf-text">GESICHT NICHT ERKANNT<br>Frontkamera ausrichten</div>
+    </div>
+  </div>
+
+  <div id="sparkline-wrap">
+    <canvas id="sparkline" height="22" width="160"></canvas>
+    <span id="sparkline-label">VERLAUF (60s)</span>
+  </div>
+
+  <div id="tags-row"></div>
+  <div id="metrics-panel">
+    <div style="text-align:center;color:var(--dim);font-size:.62rem;padding:24px;letter-spacing:2px">
+      WARTE AUF GESICHT...
+    </div>
+  </div>
+</div>
+
+<button id="ai-tips-btn">◈ KI TIPPS</button>
+
+<script type="module">
+import { FaceLandmarker, FilesetResolver }
+  from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
+
+// ── Indices ─────────────────────────────────────────────────────────────────
+const IDX = {
+  cheek_left:234,cheek_right:454,jaw_left:172,jaw_right:397,jaw_tip:152,
+  forehead:10,fore_left:103,fore_right:332,nose_bridge:6,nose_tip:4,
+  nose_base:2,nose_lw:129,nose_rw:358,eye_li:362,eye_ri:133,
+  eye_lo:263,eye_ro:33,eye_lt:386,eye_lb:374,eye_rt:159,eye_rb:145,
+  brow_li:285,brow_ri:55,mouth_l:61,mouth_r:291,ul_top:13,ul_bot:14,
+  ll_top:317,ll_bot:18,philt_top:2,philt_bot:13,mf_top:168,
+  gonial_l:172,gonial_r:397,
+  chin_l:177,chin_r:401,
+};
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+const G = (lm,k,w,h) => { const p=lm[IDX[k]]; return [p.x*w,p.y*h]; };
+const dist = (a,b) => Math.hypot(a[0]-b[0],a[1]-b[1]);
+const clamp = (v,lo,hi) => Math.max(lo,Math.min(hi,v));
+const angleHoriz = (a,b) => Math.atan2(a[1]-b[1],b[0]-a[0])*180/Math.PI;
+function angle3(a,b,c){
+  const v1=[a[0]-b[0],a[1]-b[1]],v2=[c[0]-b[0],c[1]-b[1]];
+  const dot=v1[0]*v2[0]+v1[1]*v2[1],mag=Math.hypot(...v1)*Math.hypot(...v2);
+  return mag?Math.acos(Math.max(-1,Math.min(1,dot/mag)))*180/Math.PI:90;
+}
+
+// ── Tips per metric ──────────────────────────────────────────────────────────
+const TIPS = {
+  "Symmetrie":       "Mewing + gleichmäßige Kiefermuskeln trainieren. Schlafe auf dem Rücken.",
+  "Goldener Schnitt":"Körperfettanteil reduzieren lässt die Wangenknochen hervortreten.",
+  "Gesichtsdrittel": "Mewing verbessert die Mittelgesichts-Projektion langfristig.",
+  "Jaw/Cheekbone":   "Jaw-Training (Mastic Gum) + Körperfett senken für Definition.",
+  "Gonial Winkel":   "Definierter Kieferwinkel durch niedrigen BF% und Jaw-Training.",
+  "Stirnbreite":     "Frisur strategisch wählen um Stirnbreite zu betonen/kaschieren.",
+  "Mittelgesicht":   "Mewing, korrekte Zungenposition und Nasenatmung.",
+  "Augenabstand":    "Make-up/Contour kann optisch den Augenabstand anpassen.",
+  "Canthal Tilt":    "Schläfen aufbauen (Gym) hebt die äußeren Augenwinkel optisch an.",
+  "Augenbreite":     "Ausreichend Schlaf reduziert Schwellungen. Lash care.",
+  "Nasen Index":     "Nasenflügel-Übungen haben begrenzte Wirkung. Contouring möglich.",
+  "Mund/Nase Ratio": "Körperfett senken definiert Mund-Nase-Verhältnis.",
+  "Philtrum Länge":  "Lippenpflege + richtige Haltung optimieren Philtrum-Optik.",
+  "Lippen Ratio":    "Lippenpflege, Hydration und ggf. Filler für besseres Ratio.",
+};
+
+// ── Analyze ──────────────────────────────────────────────────────────────────
+function analyzeFace(lm,w,h){
+  const g = k => G(lm,k,w,h);
+  const cheekL=g("cheek_left"),cheekR=g("cheek_right");
+  const jawL=g("jaw_left"),jawR=g("jaw_right"),jawTip=g("jaw_tip");
+  const fore=g("forehead"),foreL=g("fore_left"),foreR=g("fore_right");
+  const noseTip=g("nose_tip"),noseB=g("nose_base");
+  const noseLW=g("nose_lw"),noseRW=g("nose_rw");
+  const eyeLI=g("eye_li"),eyeRI=g("eye_ri");
+  const eyeLO=g("eye_lo"),eyeRO=g("eye_ro");
+  const eyeLT=g("eye_lt"),eyeLB=g("eye_lb");
+  const eyeRT=g("eye_rt"),eyeRB=g("eye_rb");
+  const browLI=g("brow_li"),browRI=g("brow_ri");
+  const mouthL=g("mouth_l"),mouthR=g("mouth_r");
+  const ulTop=g("ul_top"),ulBot=g("ul_bot");
+  const llTop=g("ll_top"),llBot=g("ll_bot");
+  const philtT=g("philt_top"),philtB=g("philt_bot");
+  const mfTop=g("mf_top");
+  const chinL=g("chin_l"),chinR=g("chin_r");
+
+  const faceW=dist(cheekL,cheekR),jawW=dist(jawL,jawR),faceH=dist(fore,jawTip);
+  const eyeInn=dist(eyeLI,eyeRI),mouthW=dist(mouthL,mouthR);
+  const noseW=dist(noseLW,noseRW),noseLen=dist(g("nose_bridge"),noseTip);
+  const foreW=dist(foreL,foreR);
+  const avgEW=(dist(eyeLO,eyeLI)+dist(eyeRI,eyeRO))/2;
+
+  // Head tilt (roll)
+  const jawMidX=(jawL[0]+jawR[0])/2,jawMidY=(jawL[1]+jawR[1])/2;
+  const headTilt=Math.atan2(jawR[1]-jawL[1],jawR[0]-jawL[0])*180/Math.PI;
+
+  // 1 Symmetry
+  const midX=(jawL[0]+jawR[0])/2;
+  const syms=[[cheekL[0]-midX,midX-cheekR[0]],[jawL[0]-midX,midX-jawR[0]],
+    [eyeLO[0]-midX,midX-eyeRO[0]],[mouthL[0]-midX,midX-mouthR[0]],[foreL[0]-midX,midX-foreR[0]]];
+  const symmetry=syms.reduce((acc,[l,r])=>{
+    const a=(Math.abs(l)+Math.abs(r))/2;
+    return a>0?acc+clamp(1-Math.abs(l-r)/a,0,1)*100:acc;
+  },0)/syms.length;
+
+  // 2 Golden ratio
+  const ratio=faceW/faceH||0;
+  const golden=clamp((1-Math.abs(ratio-0.618)*3.5)*100,0,100);
+
+  // 3 Face thirds
+  const browY=(browLI[1]+browRI[1])/2;
+  const t1=Math.abs(fore[1]-browY),t2=Math.abs(browY-noseTip[1]),t3=Math.abs(noseTip[1]-jawTip[1]);
+  const tot=t1+t2+t3;
+  const thirds=tot>0?clamp((1-(Math.max(t1,t2,t3)-Math.min(t1,t2,t3))/tot*2.5)*100,0,100):50;
+
+  // 4 Jaw/Cheekbone
+  const jwr=jawW/faceW||0;
+  const jawSc=clamp((1-Math.abs(jwr-0.75)*4)*100,0,100);
+
+  // 5 Canthal tilt
+  const tl=angleHoriz(eyeLI,eyeLO),tr=angleHoriz(eyeRO,eyeRI);
+  const avgTilt=(tl+tr)/2;
+  const tiltSc=clamp(50+avgTilt*5,0,100);
+
+  // 6 Eye spacing
+  const eyeR=eyeInn/faceW||0;
+  const eyeSc=clamp((1-Math.abs(eyeR-0.32)*10)*100,0,100);
+
+  // 7 Mouth/Nose
+  const mnR=noseW>0?mouthW/noseW:0;
+  const mnSc=clamp((1-Math.abs(mnR-1.5)*1.5)*100,0,100);
+
+  // 8 Philtrum
+  const philtLen=dist(philtT,philtB),lowerFaceH=dist(noseB,jawTip);
+  const philtRatio=lowerFaceH>0?philtLen/lowerFaceH:0;
+  const philtSc=clamp((1-Math.abs(philtRatio-0.34)*6)*100,0,100);
+
+  // 9 Lip ratio
+  const ulH=dist(ulTop,ulBot),llH=dist(llTop,llBot);
+  const lipR=llH>0?ulH/llH:1;
+  const lipSc=clamp((1-Math.abs(lipR-0.7)*4)*100,0,100);
+
+  // 10 Midface
+  const mfH=dist(mfTop,noseTip),mfR=faceH>0?mfH/faceH:0;
+  const mfSc=clamp((1-Math.abs(mfR-0.36)*5)*100,0,100);
+
+  // 11 Eye width
+  const ewR=faceW>0?avgEW/faceW:0;
+  const ewSc=clamp((1-Math.abs(ewR-0.22)*10)*100,0,100);
+
+  // 12 Forehead width
+  const fwR=faceW>0?foreW/faceW:0;
+  const fwSc=clamp((1-Math.abs(fwR-0.80)*4)*100,0,100);
+
+  // 13 Nose index
+  const niR=noseLen>0?noseW/noseLen:0;
+  const niSc=clamp((1-Math.abs(niR-0.70)*4)*100,0,100);
+
+  // 14 Gonial angle
+  const gonial=angle3(g("gonial_l"),jawL,jawTip);
+  const gonialSc=clamp((1-Math.abs(gonial-122)/30)*100,0,100);
+
+  const groups=[
+    {name:"STRUKTUR",items:[
+      {name:"Symmetrie",      score:symmetry, raw:`Δ${(100-symmetry).toFixed(0)}%`},
+      {name:"Goldener Schnitt",score:golden,  raw:ratio.toFixed(3)},
+      {name:"Gesichtsdrittel",score:thirds,   raw:`${t1.toFixed(0)}/${t2.toFixed(0)}/${t3.toFixed(0)}`},
+      {name:"Jaw/Cheekbone",  score:jawSc,    raw:jwr.toFixed(2)},
+      {name:"Gonial Winkel",  score:gonialSc, raw:`${gonial.toFixed(0)}°`},
+      {name:"Stirnbreite",    score:fwSc,     raw:fwR.toFixed(2)},
+    ]},
+    {name:"PROPORTIONEN",items:[
+      {name:"Mittelgesicht",  score:mfSc,     raw:mfR.toFixed(2)},
+    ]},
+    {name:"AUGEN",items:[
+      {name:"Augenabstand",   score:eyeSc,    raw:eyeR.toFixed(2)},
+      {name:"Canthal Tilt",   score:tiltSc,   raw:`${avgTilt>0?"+":""}${avgTilt.toFixed(1)}°`},
+      {name:"Augenbreite",    score:ewSc,     raw:ewR.toFixed(2)},
+    ]},
+    {name:"NASE / MUND",items:[
+      {name:"Nasen Index",    score:niSc,     raw:niR.toFixed(2)},
+      {name:"Mund/Nase Ratio",score:mnSc,     raw:mnR.toFixed(2)},
+      {name:"Philtrum Länge", score:philtSc,  raw:philtRatio.toFixed(2)},
+      {name:"Lippen Ratio",   score:lipSc,    raw:lipR.toFixed(2)},
+    ]},
+  ];
+
+  const allScores=groups.flatMap(g=>g.items.map(i=>i.score));
+  const avg=allScores.reduce((a,b)=>a+b,0)/allScores.length;
+
+  return {
+    groups,avg,score10:(avg/100*9+1).toFixed(1),
+    tiltDeg:avgTilt,headTilt,jwRatio:jwr,symmetry,gonial,
+    pts:{cheekL,cheekR,jawL,jawR,jawTip,fore,eyeLI,eyeRI,eyeLO,eyeRO,
+         noseTip,noseLW,noseRW,mouthL,mouthR,browLI,browRI,
+         foreL,foreR,chinL,chinR,
+         t1,t2,t3,browY}
+  };
+}
+
+// ── Smoothing (EMA) ───────────────────────────────────────────────────────────
+const ALPHA=0.15; // lower = smoother but slower
+let smoothed=null;
+
+function smooth(current){
+  if(!smoothed){
+    smoothed=JSON.parse(JSON.stringify(current));
+    return smoothed;
+  }
+  const ema=(a,b)=>a+(b-a)*ALPHA;
+  smoothed.avg=ema(smoothed.avg,current.avg);
+  smoothed.tiltDeg=ema(smoothed.tiltDeg,current.tiltDeg);
+  smoothed.headTilt=ema(smoothed.headTilt,current.headTilt);
+  smoothed.jwRatio=ema(smoothed.jwRatio,current.jwRatio);
+  smoothed.symmetry=ema(smoothed.symmetry,current.symmetry);
+  smoothed.gonial=ema(smoothed.gonial,current.gonial);
+  smoothed.score10=(smoothed.avg/100*9+1).toFixed(1);
+  smoothed.groups.forEach((g,gi)=>{
+    g.items.forEach((item,ii)=>{
+      item.score=ema(item.score,current.groups[gi].items[ii].score);
+    });
+  });
+  // Pass through pts directly for canvas (no smoothing needed there)
+  smoothed.pts=current.pts;
+  return smoothed;
+}
+
+// ── Tier & colors ─────────────────────────────────────────────────────────────
+function getTier(avg){
+  if(avg>=88) return ["CHAD TIER","#00ff99"];
+  if(avg>=78) return ["HIGH TIER","#00ff99"];
+  if(avg>=66) return ["ABOVE AVG","#ffaa00"];
+  if(avg>=52) return ["AVERAGE","#ffaa00"];
+  if(avg>=40) return ["BELOW AVG","#ff2d4e"];
+  return             ["NEEDS MAXX","#ff2d4e"];
+}
+const barClass=s=>s>=75?"good":s>=50?"mid":"bad";
+const scoreColor=s=>s>=75?"var(--green)":s>=50?"var(--orange)":"var(--red)";
+
+// ── Score history (60 datapoints ≈ 60s at ~1/s) ───────────────────────────────
+const HISTORY_MAX=60;
+const scoreHistory=[];
+let lastHistoryTime=0;
+
+function addHistory(score){
+  const now=Date.now();
+  if(now-lastHistoryTime<1000) return;
+  lastHistoryTime=now;
+  scoreHistory.push(score);
+  if(scoreHistory.length>HISTORY_MAX) scoreHistory.shift();
+}
+
+function drawSparkline(score){
+  if(scoreHistory.length<2) return;
+  const wrap=document.getElementById("sparkline-wrap");
+  wrap.style.display="flex";
+  const canvas=document.getElementById("sparkline");
+  const ctx=canvas.getContext("2d");
+  const W=canvas.width,H=canvas.height;
+  ctx.clearRect(0,0,W,H);
+  const min=Math.max(0,Math.min(...scoreHistory)-5);
+  const max=Math.min(100,Math.max(...scoreHistory)+5);
+  const range=max-min||1;
+  const pts=scoreHistory.map((v,i)=>[i/(scoreHistory.length-1)*W,(1-(v-min)/range)*(H-2)+1]);
+  // gradient fill
+  const grad=ctx.createLinearGradient(0,0,W,0);
+  grad.addColorStop(0,"rgba(0,212,255,.1)");
+  grad.addColorStop(1,"rgba(0,212,255,.4)");
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0],H);
+  pts.forEach(p=>ctx.lineTo(p[0],p[1]));
+  ctx.lineTo(pts[pts.length-1][0],H);
+  ctx.closePath();
+  ctx.fillStyle=grad;
+  ctx.fill();
+  // line
+  ctx.beginPath();
+  ctx.strokeStyle="var(--accent)";
+  ctx.lineWidth=1.5;
+  pts.forEach((p,i)=>i===0?ctx.moveTo(...p):ctx.lineTo(...p));
+  ctx.stroke();
+  // current dot
+  const last=pts[pts.length-1];
+  ctx.beginPath();
+  ctx.arc(last[0],last[1],2.5,0,Math.PI*2);
+  ctx.fillStyle="var(--green)";
+  ctx.fill();
+}
+
+// ── Personal best ─────────────────────────────────────────────────────────────
+let personalBest = parseFloat(localStorage.getItem("lm_best")||"0");
+
+function updateBest(score10){
+  const v=parseFloat(score10);
+  const badge=document.getElementById("best-badge");
+  badge.style.display="inline";
+  if(v>personalBest){
+    personalBest=v;
+    localStorage.setItem("lm_best",v.toString());
+    // Pulse animation
+    const sb=document.getElementById("score-badge");
+    sb.classList.remove("new-high-pulse");
+    void sb.offsetWidth;
+    sb.classList.add("new-high-pulse");
+    // Haptic
+    if(navigator.vibrate) navigator.vibrate([40,20,40]);
+  }
+  badge.textContent=`★ BEST: ${personalBest.toFixed(1)}`;
+}
+
+// ── Canvas overlay ─────────────────────────────────────────────────────────────
+function drawOverlay(ctx,result,cw,ch){
+  ctx.clearRect(0,0,cw,ch);
+  const p=result.pts;
+  const [,col]=getTier(result.avg);
+
+  // Helper dot
+  const dot=(pt,color="#00d4ff99",r=2)=>{
+    ctx.fillStyle=color;
+    ctx.beginPath();ctx.arc(pt[0],pt[1],r,0,Math.PI*2);ctx.fill();
+  };
+  const line=(a,b,color,w=1)=>{
+    ctx.strokeStyle=color;ctx.lineWidth=w;
+    ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke();
+  };
+
+  // Face bounding box
+  const allPts=[p.cheekL,p.cheekR,p.jawL,p.jawR,p.jawTip,p.fore,p.foreL,p.foreR];
+  const xs=allPts.map(q=>q[0]),ys=allPts.map(q=>q[1]);
+  const x1=Math.max(0,Math.min(...xs)-28),y1=Math.max(0,Math.min(...ys)-40);
+  const x2=Math.min(cw,Math.max(...xs)+28),y2=Math.min(ch,Math.max(...ys)+22);
+  ctx.strokeStyle="#00d4ff22";ctx.lineWidth=1;
+  ctx.strokeRect(x1,y1,x2-x1,y2-y1);
+
+  // Face thirds lines
+  const mx=(x1+x2)/2;
+  const bY=p.browLI?(p.browLI[1]+p.browRI[1])/2:null;
+  if(bY){
+    ctx.setLineDash([3,4]);
+    line([x1,bY],[x2,bY],"rgba(0,212,255,.15)");
+    line([x1,p.noseTip[1]],[x2,p.noseTip[1]],"rgba(0,212,255,.15)");
+    ctx.setLineDash([]);
+  }
+
+  // Vertical midline
+  ctx.setLineDash([2,5]);
+  line([mx,y1],[mx,y2],"rgba(0,212,255,.12)");
+  ctx.setLineDash([]);
+
+  // Cheekbone line
+  line(p.cheekL,p.cheekR,"rgba(0,212,255,.35)");
+  // Forehead width
+  line(p.foreL,p.foreR,"rgba(0,212,255,.2)");
+  // Jaw outline
+  ctx.strokeStyle="rgba(0,212,255,.25)";ctx.lineWidth=1;
+  ctx.beginPath();
+  ctx.moveTo(p.jawL[0],p.jawL[1]);
+  ctx.lineTo(p.chinL[0],p.chinL[1]);
+  ctx.lineTo(p.jawTip[0],p.jawTip[1]);
+  ctx.lineTo(p.chinR[0],p.chinR[1]);
+  ctx.lineTo(p.jawR[0],p.jawR[1]);
+  ctx.stroke();
+  // Jaw width
+  line(p.jawL,p.jawR,"rgba(0,212,255,.2)");
+
+  // Canthal tilt lines
+  const tc=result.tiltDeg>1.2?"#00ff9988":"#ff2d4e88";
+  ctx.lineWidth=1.5;
+  line(p.eyeLO,p.eyeLI,tc,1.5);
+  line(p.eyeRI,p.eyeRO,tc,1.5);
+
+  // Nose width
+  line(p.noseLW,p.noseRW,"rgba(255,170,0,.4)");
+  // Mouth width
+  line(p.mouthL,p.mouthR,"rgba(0,212,255,.25)");
+
+  // Score color corner accent
+  ctx.strokeStyle=col+"88";ctx.lineWidth=2;
+  const corners=[
+    [x1,y1,14,14],[x2,y1,-14,14],
+    [x1,y2,14,-14],[x2,y2,-14,-14],
+  ];
+  corners.forEach(([cx,cy,dx,dy])=>{
+    ctx.beginPath();ctx.moveTo(cx+dx,cy);ctx.lineTo(cx,cy);ctx.lineTo(cx,cy+dy);ctx.stroke();
+  });
+
+  // Key dots
+  [p.cheekL,p.cheekR,p.jawL,p.jawR,p.jawTip,
+   p.eyeLO,p.eyeLI,p.eyeRI,p.eyeRO,p.noseTip,
+   p.mouthL,p.mouthR].forEach(pt=>dot(pt,"rgba(0,212,255,.7)",2));
+}
+
+// ── Score ring update ─────────────────────────────────────────────────────────
+function updateRing(avg,col){
+  const fill=document.getElementById("ring-fill");
+  const circum=188.5;
+  const offset=circum-(avg/100)*circum;
+  fill.style.strokeDashoffset=offset.toFixed(1);
+  fill.style.stroke=col;
+}
+
+// ── Render score badge ────────────────────────────────────────────────────────
+function renderScore(result){
+  const [tier,col]=getTier(result.avg);
+  document.getElementById("score-badge").style.display="block";
+  document.getElementById("tier-text").textContent=tier;
+  document.getElementById("tier-text").style.color=col;
+  document.getElementById("score-num").textContent=result.score10;
+  document.getElementById("score-num").style.color=col;
+  updateRing(result.avg,col);
+}
+
+// ── Render metrics (throttled externally) ────────────────────────────────────
+let openTips=new Set();
+function renderMetrics(result){
+  const panel=document.getElementById("metrics-panel");
+  panel.innerHTML=result.groups.map(g=>{
+    const gavg=g.items.reduce((a,i)=>a+i.score,0)/g.items.length;
+    const gc=scoreColor(gavg);
+    return `<div class="group">
+      <div class="group-title">◈ ${g.name}
+        <span class="group-avg" style="color:${gc};border-color:${gc}">${Math.round(gavg)}</span>
+      </div>
+      ${g.items.map(item=>{
+        const tip=TIPS[item.name]||"";
+        const showTip=openTips.has(item.name);
+        const tipNeeded=item.score<70;
+        return `<div class="metric" data-metric="${item.name}">
+          <div class="metric-row">
+            <span class="metric-name">${item.name}${tipNeeded?"<span style='color:var(--dim);margin-left:4px;font-size:.5rem'>▸ TIP</span>":""}</span>
+            <div class="metric-right">
+              <span class="metric-raw">${item.raw}</span>
+              <span class="metric-score" style="color:${scoreColor(item.score)}">${Math.round(item.score)}</span>
+            </div>
+          </div>
+          <div class="bar-bg">
+            <div class="bar-fill ${barClass(item.score)}" style="width:${item.score.toFixed(1)}%"></div>
+          </div>
+          ${tip?`<div class="tip-drawer ${showTip?"open":""}">${tip}</div>`:""}
+        </div>`;
+      }).join("")}
+    </div>`;
+  }).join("");
+
+  // Click handlers for tips
+  panel.querySelectorAll(".metric").forEach(el=>{
+    el.addEventListener("click",()=>{
+      const name=el.dataset.metric;
+      if(openTips.has(name)) openTips.delete(name);
+      else openTips.add(name);
+      el.querySelector(".tip-drawer")?.classList.toggle("open");
+    });
+  });
+}
+
+// ── Render tags ───────────────────────────────────────────────────────────────
+function renderTags(result){
+  const tags=[];
+  tags.push(result.symmetry>=80?{l:"Symmetrisch",c:"good"}:{l:"Asymmetrisch",c:"bad"});
+  if(result.tiltDeg>1.5) tags.push({l:"Hunter Eyes",c:"good"});
+  else if(result.tiltDeg<-1.5) tags.push({l:"Downtilt",c:"bad"});
+  else tags.push({l:"Neutral Tilt",c:"mid"});
+  if(result.jwRatio>=0.68&&result.jwRatio<=0.82) tags.push({l:"Strong Jaw",c:"good"});
+  else if(result.jwRatio<0.60) tags.push({l:"Weak Jaw",c:"bad"});
+  if(result.gonial<=125) tags.push({l:"Sharp Jaw",c:"good"});
+  else if(result.gonial>=140) tags.push({l:"Round Jaw",c:"bad"});
+  const avg=result.avg;
+  if(avg>=78) tags.push({l:"Looksmaxxed",c:"good"});
+  else if(avg<45) tags.push({l:"Maxxing Needed",c:"bad"});
+  document.getElementById("tags-row").innerHTML=tags.map(t=>`<span class="tag ${t.c}">${t.l}</span>`).join("");
+}
+
+// ── Head tilt warning ─────────────────────────────────────────────────────────
+function updateTiltWarning(headTilt){
+  const warn=document.getElementById("tilt-warn");
+  warn.style.display=Math.abs(headTilt)>8?"block":"none";
+}
+
+// ── AI Tips via Claude API ────────────────────────────────────────────────────
+let lastResult=null;
+
+async function fetchAITips(){
+  if(!lastResult) return;
+  const btn=document.getElementById("ai-tips-btn");
+  const panel=document.getElementById("ai-panel");
+  const content=document.getElementById("ai-content");
+  btn.classList.add("loading");
+  btn.textContent="◈ LADEN...";
+  panel.classList.add("open");
+  content.innerHTML='<span class="ai-typing"></span>';
+
+  const metricsSummary=lastResult.groups.flatMap(g=>g.items)
+    .map(i=>`${i.name}: ${Math.round(i.score)}/100 (${i.raw})`)
+    .join(", ");
+
+  const prompt=`Du bist ein Looksmaxxing Coach. Ich habe folgende Gesichtsmetriken aus einem KI-Scanner:
+
+Score: ${lastResult.score10}/10 | Tier: ${getTier(lastResult.avg)[0]}
+Metriken: ${metricsSummary}
+Canthal Tilt: ${lastResult.tiltDeg>0?"+":""}${lastResult.tiltDeg.toFixed(1)}°
+Gonial Winkel: ${lastResult.gonial.toFixed(0)}°
+Symmetrie: ${lastResult.symmetry.toFixed(0)}/100
+
+Gib mir eine kurze, präzise Analyse meiner 3 schwächsten Punkte und konkrete, umsetzbare Tipps (Mewing, Gym, Pflege, etc.) auf Deutsch. Halte es kurz (max 200 Wörter), ehrlich und motivierend. Keine langen Einleitungen.`;
+
+  try {
+    const resp=await fetch("https://api.anthropic.com/v1/messages",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        model:"claude-sonnet-4-20250514",
+        max_tokens:1000,
+        messages:[{role:"user",content:prompt}]
+      })
+    });
+    const data=await resp.json();
+    const text=data.content?.map(b=>b.text||"").join("")||"Keine Antwort erhalten.";
+    content.innerHTML=text.replace(/\*\*(.*?)\*\*/g,"<strong style='color:var(--accent)'>$1</strong>")
+      .replace(/\n/g,"<br>");
+  } catch(e){
+    content.innerHTML=`<span style="color:var(--red)">FEHLER: ${e.message}</span>`;
+  }
+  btn.classList.remove("loading");
+  btn.textContent="◈ KI TIPPS";
+}
+
+document.getElementById("ai-tips-btn").addEventListener("click",fetchAITips);
+document.getElementById("ai-close").addEventListener("click",()=>{
+  document.getElementById("ai-panel").classList.remove("open");
+});
+
+// ── Loading progress ──────────────────────────────────────────────────────────
+function setLoad(pct,msg){
+  document.getElementById("lfill").style.width=pct+"%";
+  document.getElementById("lmsg").textContent=msg;
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────────
+let landmarker=null;
+let lastFrameTime=-1;
+let fps=0,frameCount=0,lastFpsTime=Date.now();
+let lastRenderTime=0;
+const RENDER_INTERVAL=120; // ~8fps for UI updates
+
+async function init(){
+  setLoad(10,"LADE VISION TOOLKIT...");
+  const vision=await FilesetResolver.forVisionTasks(
+    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+  );
+  setLoad(40,"LADE FACE LANDMARKER MODEL...");
+  landmarker=await FaceLandmarker.createFromOptions(vision,{
+    baseOptions:{
+      modelAssetPath:"https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+      delegate:"GPU"
+    },
+    outputFaceBlendshapes:false,
+    runningMode:"VIDEO",
+    numFaces:1,
+    minFaceDetectionConfidence:0.5,
+    minFacePresenceConfidence:0.5,
+    minTrackingConfidence:0.5,
+  });
+
+  setLoad(70,"KAMERA STARTEN...");
+  const video=document.getElementById("video");
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:"user",width:{ideal:640},height:{ideal:480}}
+    });
+    video.srcObject=stream;
+    await new Promise(r=>video.onloadedmetadata=r);
+    video.play();
+    document.getElementById("st-left").textContent=`CAM: ${video.videoWidth}×${video.videoHeight}`;
+  }catch(e){
+    setLoad(100,"KAMERAFEHLER: "+e.message);
+    return;
+  }
+
+  const overlay=document.getElementById("overlay");
+  overlay.width=video.videoWidth;
+  overlay.height=video.videoHeight;
+  const ctx=overlay.getContext("2d");
+  const corners=document.querySelectorAll(".corner");
+
+  setLoad(100,"BEREIT!");
+  await new Promise(r=>setTimeout(r,500));
+  document.getElementById("loading").style.display="none";
+  document.getElementById("hdr-status").textContent="LIVE";
+
+  // Init personal best display
+  if(personalBest>0){
+    const badge=document.getElementById("best-badge");
+    badge.style.display="inline";
+    badge.textContent=`★ BEST: ${personalBest.toFixed(1)}`;
+  }
+
+  requestAnimationFrame(function loop(now){
+    requestAnimationFrame(loop);
+    if(video.readyState<2||now===lastFrameTime) return;
+    lastFrameTime=now;
+
+    // FPS counter
+    frameCount++;
+    const elapsed=Date.now()-lastFpsTime;
+    if(elapsed>=1000){fps=Math.round(frameCount*1000/elapsed);frameCount=0;lastFpsTime=Date.now();}
+    document.getElementById("hdr-fps").textContent=`FPS: ${fps}`;
+
+    const result=landmarker.detectForVideo(video,now);
+
+    if(result.faceLandmarks?.length>0){
+      const lm=result.faceLandmarks[0];
+      const raw=analyzeFace(lm,video.videoWidth,video.videoHeight);
+      const s=smooth(raw);
+      lastResult=s;
+
+      // Always update canvas overlay (every frame)
+      drawOverlay(ctx,s,video.videoWidth,video.videoHeight);
+      updateTiltWarning(s.headTilt);
+
+      // Throttled UI updates
+      const nowMs=Date.now();
+      if(nowMs-lastRenderTime>RENDER_INTERVAL){
+        lastRenderTime=nowMs;
+        document.getElementById("noface").style.display="none";
+        corners.forEach(c=>c.classList.add("active"));
+        renderScore(s);
+        renderTags(s);
+        renderMetrics(s);
+        addHistory(s.avg);
+        drawSparkline(s.avg);
+        updateBest(s.score10);
+        document.getElementById("hdr-status").textContent="ERKANNT";
+        document.getElementById("st-right").textContent=`${s.score10}/10`;
+      }
+    } else {
+      smoothed=null; // Reset smoothing when face lost
+      document.getElementById("noface").style.display="flex";
+      document.getElementById("score-badge").style.display="none";
+      document.getElementById("tilt-warn").style.display="none";
+      corners.forEach(c=>c.classList.remove("active"));
+      ctx.clearRect(0,0,overlay.width,overlay.height);
+      document.getElementById("hdr-status").textContent="SUCHE...";
+      document.getElementById("st-right").textContent="14 METRIKEN";
+      document.getElementById("tags-row").innerHTML="";
+    }
+  });
+}
+
+init().catch(e=>{
+  document.getElementById("lmsg").textContent="FEHLER: "+e.message;
+  document.getElementById("lmsg").style.color="var(--red)";
+});
+</script>
+</body>
+</html>
